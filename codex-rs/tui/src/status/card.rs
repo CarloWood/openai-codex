@@ -59,6 +59,9 @@ struct StatusHistoryCell {
     model_name: String,
     model_details: Vec<String>,
     directory: PathBuf,
+    // <exec-socket-tap>
+    exec_socket_path: Option<PathBuf>,
+    // </exec-socket-tap>
     approval: String,
     sandbox: String,
     agents_summary: String,
@@ -154,6 +157,9 @@ impl StatusHistoryCell {
             model_name,
             model_details,
             directory: config.cwd.clone(),
+            // <exec-socket-tap>
+            exec_socket_path: config.exec_socket_path.clone(),
+            // </exec-socket-tap>
             approval,
             sandbox,
             agents_summary,
@@ -338,6 +344,11 @@ impl HistoryCell for StatusHistoryCell {
                 .collect();
         let mut seen: BTreeSet<String> = labels.iter().cloned().collect();
 
+        // <exec-socket-tap>
+        if self.exec_socket_path.is_some() {
+            push_label(&mut labels, &mut seen, "Exec socket");
+        }
+        // </exec-socket-tap>
         if account_value.is_some() {
             push_label(&mut labels, &mut seen, "Account");
         }
@@ -381,6 +392,12 @@ impl HistoryCell for StatusHistoryCell {
 
         lines.push(formatter.line("Model", model_spans));
         lines.push(formatter.line("Directory", vec![Span::from(directory_value)]));
+        // <exec-socket-tap>
+        if let Some(socket_path) = self.exec_socket_path.as_ref() {
+            let socket_value = format_directory_display(socket_path, Some(value_width));
+            lines.push(formatter.line("Exec socket", vec![Span::from(socket_value)]));
+        }
+        // </exec-socket-tap>
         lines.push(formatter.line("Approval", vec![Span::from(self.approval.clone())]));
         lines.push(formatter.line("Sandbox", vec![Span::from(self.sandbox.clone())]));
         lines.push(formatter.line("Agents.md", vec![Span::from(self.agents_summary.clone())]));

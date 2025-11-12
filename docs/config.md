@@ -417,6 +417,19 @@ set = { PATH = "/usr/bin", MY_FLAG = "1" }
 
 Currently, `CODEX_SANDBOX_NETWORK_DISABLED=1` is also added to the environment, assuming network is disabled. This is not configurable.
 
+<!-- <exec-socket-tap> -->
+### exec_socket_path
+
+Set `exec_socket_path` to the filesystem location of a UNIX-domain socket that should receive raw exec output chunks. Codex stores the path in the active session configuration (and shows it in `/status`) so downstream tools can connect and forward the unformatted PTY output elsewhere. Provide an absolute path or one relative to the configured `cwd`.
+
+```toml
+# forward exec output to /tmp/codex-exec.sock
+exec_socket_path = "/tmp/codex-exec.sock"
+```
+
+Setting the key alone does not create the socket; it simply makes the path available so other components can publish to it in a follow-up step.
+<!-- </exec-socket-tap> -->
+
 ## MCP integration
 
 ### mcp_servers
@@ -942,6 +955,9 @@ Valid values:
 | `sandbox_workspace_write.exclude_slash_tmp`      | boolean                                                           | Exclude `/tmp` from writable roots (default: false).                                                                            |
 | `notify`                                         | array<string>                                                     | External program for notifications.                                                                                             |
 | `tui.animations`                                 | boolean                                                           | Enable terminal animations (welcome screen, shimmer, spinner). Defaults to true; set to `false` to disable visual motion.       |
+<!-- <exec-socket-tap> -->
+| `exec_socket_path`                               | string (path)                                                     | Optional UNIX socket path for forwarding raw exec output; relative paths resolve against the configured `cwd`.             |
+<!-- </exec-socket-tap> -->
 | `instructions`                                   | string                                                            | Currently ignored; use `experimental_instructions_file` or `AGENTS.md`.                                                         |
 | `features.<feature-flag>`                        | boolean                                                           | See [feature flags](#feature-flags) for details                                                                                 |
 | `ghost_snapshot.disable_warnings`                | boolean                                                           | Disable every warnings around ghost snapshot (large files, directory, ...)                                                      |

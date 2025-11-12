@@ -2,6 +2,9 @@ use std::sync::Arc;
 
 use crate::AuthManager;
 use crate::RolloutRecorder;
+// <exec-socket-tap>
+use crate::exec_output_socket::ExecOutputSocket;
+// </exec-socket-tap>
 use crate::mcp_connection_manager::McpConnectionManager;
 use crate::openai_models::models_manager::ModelsManager;
 use crate::skills::SkillsManager;
@@ -26,4 +29,7 @@ pub(crate) struct SessionServices {
     pub(crate) otel_manager: OtelManager,
     pub(crate) tool_approvals: Mutex<ApprovalStore>,
     pub(crate) skills_manager: Arc<SkillsManager>,
+    // <exec-socket-tap>
+    pub(crate) exec_output_socket: Option<Arc<ExecOutputSocket>>,
+    // </exec-socket-tap>
 }

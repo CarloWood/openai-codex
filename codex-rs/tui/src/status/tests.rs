@@ -425,6 +425,53 @@ async fn status_card_token_usage_excludes_cached_tokens() {
     );
 }
 
+// <exec-socket-tap>
+#[tokio::test]
+async fn status_shows_exec_socket_path_when_configured() {
+    let temp_home = TempDir::new().expect("temp home");
+    let mut config = test_config(&temp_home);
+    config.model = "gpt-5-codex".to_string();
+    config.cwd = PathBuf::from("/workspace/tests");
+    config.exec_socket_path = Some(PathBuf::from("/custom/codex.sock"));
+
+    let auth_manager = test_auth_manager(&config);
+    let usage = TokenUsage {
+        input_tokens: 0,
+        cached_input_tokens: 0,
+        output_tokens: 0,
+        reasoning_output_tokens: 0,
+        total_tokens: 0,
+    };
+
+    let now = chrono::Local
+        .with_ymd_and_hms(2024, 2, 2, 0, 0, 0)
+        .single()
+        .expect("timestamp");
+
+    let composite = new_status_output(
+        &config,
+        &auth_manager,
+        &usage,
+        Some(&usage),
+        &None,
+        None,
+        now,
+    );
+    let rendered_lines = render_lines(&composite.display_lines(120));
+
+    let exec_line = rendered_lines
+        .iter()
+        .find(|line| line.contains("Exec socket:"))
+        .cloned();
+    assert!(
+        exec_line
+            .as_ref()
+            .is_some_and(|line| line.contains("/custom/codex.sock")),
+        "expected exec socket path to appear in /status output: {rendered_lines:?}"
+    );
+}
+// </exec-socket-tap>
+
 #[tokio::test]
 async fn status_snapshot_truncates_in_narrow_terminal() {
     let temp_home = TempDir::new().expect("temp home");

@@ -1,3 +1,11 @@
+// <exec-socket-tap> log and forward unified_exec run details to socket
+use tracing::info;
+
+use crate::exec_output_socket::ExecCommandMetadata;
+use crate::exec_output_socket::ExecSocketPayload;
+use crate::exec_output_socket::forward_command_to_socket;
+use crate::exec_output_socket::forward_to_socket;
+// </exec-socket-tap>
 use crate::function_tool::FunctionCallError;
 use crate::is_safe_command::is_known_safe_command;
 use crate::protocol::EventMsg;
@@ -129,6 +137,9 @@ impl ToolHandler for UnifiedExecHandler {
                 let process_id = manager.allocate_process_id().await;
                 let command = get_command(&args, session.user_shell());
 
+                // <exec-socket-tap>
+                let cmd = args.cmd.clone();
+                // </exec-socket-tap>
                 let ExecCommandArgs {
                     workdir,
                     yield_time_ms,
@@ -171,6 +182,18 @@ impl ToolHandler for UnifiedExecHandler {
                     manager.release_process_id(&process_id).await;
                     return Ok(output);
                 }
+                // <exec-socket-tap> forward exec command metadata to socket tap
+                if let Some(socket) = context.turn.exec_output_socket() {
+                    let metadata = ExecCommandMetadata {
+                        call_id: &context.call_id,
+                        command: &cmd,
+                        cwd: &cwd,
+                        is_user: false,
+                    };
+                    info!(?metadata, "unified_exec: forwarding exec command to socket");
+                    forward_command_to_socket(&socket, metadata).await;
+                }
+                // </exec-socket-tap>
 
                 let event_ctx = ToolEventCtx::new(
                     context.session.as_ref(),
@@ -186,6 +209,9 @@ impl ToolHandler for UnifiedExecHandler {
                 );
                 emitter.emit(event_ctx, ToolEventStage::Begin).await;
 
+                // <exec-socket-tap> log command heading into unified exec orchestrator
+                info!("unified_exec: calling manager.exec_command with command {cmd}");
+                // </exec-socket-tap>
                 manager
                     .exec_command(
                         ExecCommandRequest {
@@ -239,6 +265,23 @@ impl ToolHandler for UnifiedExecHandler {
                 )));
             }
         };
+
+        // <exec-socket-tap> forward streamed exec output to socket tap
+        if let Some(socket) = turn.exec_output_socket()
+            && (!response.output.is_empty() || response.session_id.is_none())
+        {
+            let is_final = response.session_id.is_none();
+            let payload = ExecSocketPayload {
+                call_id: &response.event_call_id,
+                session_id: response.session_id,
+                exit_code: if is_final { response.exit_code } else { None },
+                is_final,
+                output: &response.output,
+            };
+
+            forward_to_socket(&socket, payload).await;
+        }
+        // </exec-socket-tap>
 
         let content = format_response(&response);
 
