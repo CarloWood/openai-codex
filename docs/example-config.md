@@ -158,6 +158,12 @@ windows_wsl_setup_acknowledged = false
 # Example: notify = ["notify-send", "Codex"]
 # notify = [ ]
 
+<!-- <exec-socket-tap> -->
+# Optional UNIX socket for raw exec output taps. Relative paths resolve
+# against the configured cwd. Default: unset.
+# exec_socket_path = "/tmp/codex-exec.sock"
+<!-- </exec-socket-tap> -->
+
 # In-product notices (mostly set automatically by Codex).
 [notice]
 # hide_full_access_warning = true

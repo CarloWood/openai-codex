@@ -26,6 +26,11 @@ pub fn create_config_summary_entries(config: &Config) -> Vec<(&'static str, Stri
             config.model_reasoning_summary.to_string(),
         ));
     }
+    // <exec-socket-tap>
+    if let Some(path) = config.exec_socket_path.as_ref() {
+        entries.push(("exec socket", path.display().to_string()));
+    }
+    // </exec-socket-tap>
 
     entries
 }

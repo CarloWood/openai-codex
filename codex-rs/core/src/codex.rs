@@ -10,6 +10,10 @@ use crate::compact;
 use crate::compact::run_inline_auto_compact_task;
 use crate::compact::should_use_remote_compact_task;
 use crate::compact_remote::run_inline_remote_auto_compact_task;
+// <exec-socket-tap>
+use crate::exec_output_socket::ExecOutputSocket;
+use crate::exec_output_socket::forward_session_config_to_socket;
+// </exec-socket-tap>
 use crate::features::Feature;
 use crate::function_tool::FunctionCallError;
 use crate::parse_command::parse_command;
@@ -286,6 +290,9 @@ pub(crate) struct TurnContext {
     pub(crate) tool_call_gate: Arc<ReadinessFlag>,
     pub(crate) exec_policy: Arc<ExecPolicy>,
     pub(crate) truncation_policy: TruncationPolicy,
+    // <exec-socket-tap>
+    pub(crate) exec_output_socket: Option<Arc<ExecOutputSocket>>,
+    // </exec-socket-tap>
 }
 
 impl TurnContext {
@@ -300,6 +307,12 @@ impl TurnContext {
             .as_deref()
             .unwrap_or(compact::SUMMARIZATION_PROMPT)
     }
+
+    // <exec-socket-tap>
+    pub(crate) fn exec_output_socket(&self) -> Option<Arc<ExecOutputSocket>> {
+        self.exec_output_socket.clone()
+    }
+    // </exec-socket-tap>
 }
 
 #[derive(Clone)]
@@ -394,6 +407,9 @@ impl Session {
         session_configuration: &SessionConfiguration,
         conversation_id: ConversationId,
         sub_id: String,
+        // <exec-socket-tap>
+        exec_output_socket: Option<Arc<ExecOutputSocket>>,
+        // </exec-socket-tap>
     ) -> TurnContext {
         let config = session_configuration.original_config_do_not_use.clone();
         let model_family = find_family_for_model(&session_configuration.model)
@@ -445,8 +461,33 @@ impl Session {
             tool_call_gate: Arc::new(ReadinessFlag::new()),
             exec_policy: session_configuration.exec_policy.clone(),
             truncation_policy: TruncationPolicy::new(&per_turn_config),
+            // <exec-socket-tap>
+            exec_output_socket,
+            // </exec-socket-tap>
         }
     }
+
+    // <exec-socket-tap>
+    fn make_exec_output_socket(config: &Config) -> Option<Arc<ExecOutputSocket>> {
+        #[cfg(unix)]
+        {
+            config
+                .exec_socket_path
+                .as_ref()
+                .map(|path| ExecOutputSocket::new(path.clone()))
+        }
+        #[cfg(not(unix))]
+        {
+            if let Some(path) = config.exec_socket_path.as_ref() {
+                warn!(
+                    ?path,
+                    "exec_socket_path is configured but unsupported on this platform"
+                );
+            }
+            None
+        }
+    }
+    // </exec-socket-tap>
 
     async fn new(
         session_configuration: SessionConfiguration,
@@ -553,6 +594,14 @@ impl Session {
         // Create the mutable state for the Session.
         let state = SessionState::new(session_configuration.clone());
 
+        // <exec-socket-tap>
+        let exec_output_socket = Session::make_exec_output_socket(&config);
+
+        if let Some(socket) = exec_output_socket.as_ref() {
+            forward_session_config_to_socket(socket, &conversation_id).await;
+        }
+        // </exec-socket-tap>
+
         let services = SessionServices {
             mcp_connection_manager: Arc::new(RwLock::new(McpConnectionManager::default())),
             mcp_startup_cancellation_token: CancellationToken::new(),
@@ -564,6 +613,9 @@ impl Session {
             auth_manager: Arc::clone(&auth_manager),
             otel_event_manager,
             tool_approvals: Mutex::new(ApprovalStore::default()),
+            // <exec-socket-tap>
+            exec_output_socket: exec_output_socket.clone(),
+            // </exec-socket-tap>
         };
 
         let sess = Arc::new(Session {
@@ -732,6 +784,9 @@ impl Session {
             &session_configuration,
             self.conversation_id,
             sub_id,
+            // <exec-socket-tap>
+            self.services.exec_output_socket.clone(),
+            // </exec-socket-tap>
         );
         if let Some(final_schema) = updates.final_output_json_schema {
             turn_context.final_output_json_schema = final_schema;
@@ -1796,6 +1851,9 @@ async fn spawn_review_thread(
         tool_call_gate: Arc::new(ReadinessFlag::new()),
         exec_policy: parent_turn_context.exec_policy.clone(),
         truncation_policy: TruncationPolicy::new(&per_turn_config),
+        // <exec-socket-tap>
+        exec_output_socket: parent_turn_context.exec_output_socket(),
+        // </exec-socket-tap>
     };
 
     // Seed the child task with the review prompt as the initial user message.
@@ -2621,6 +2679,10 @@ mod tests {
 
         let state = SessionState::new(session_configuration.clone());
 
+        // <exec-socket-tap>
+        let exec_output_socket = Session::make_exec_output_socket(&config);
+        // </exec-socket-tap>
+
         let services = SessionServices {
             mcp_connection_manager: Arc::new(RwLock::new(McpConnectionManager::default())),
             mcp_startup_cancellation_token: CancellationToken::new(),
@@ -2632,6 +2694,9 @@ mod tests {
             auth_manager: Arc::clone(&auth_manager),
             otel_event_manager: otel_event_manager.clone(),
             tool_approvals: Mutex::new(ApprovalStore::default()),
+            // <exec-socket-tap>
+            exec_output_socket: exec_output_socket.clone(),
+            // </exec-socket-tap>
         };
 
         let turn_context = Session::make_turn_context(
@@ -2641,6 +2706,9 @@ mod tests {
             &session_configuration,
             conversation_id,
             "turn_id".to_string(),
+            // <exec-socket-tap>
+            exec_output_socket,
+            // </exec-socket-tap>
         );
 
         let session = Session {
@@ -2699,6 +2767,10 @@ mod tests {
 
         let state = SessionState::new(session_configuration.clone());
 
+        // <exec-socket-tap>
+        let exec_output_socket = Session::make_exec_output_socket(&config);
+        // </exec-socket-tap>
+
         let services = SessionServices {
             mcp_connection_manager: Arc::new(RwLock::new(McpConnectionManager::default())),
             mcp_startup_cancellation_token: CancellationToken::new(),
@@ -2710,6 +2782,9 @@ mod tests {
             auth_manager: Arc::clone(&auth_manager),
             otel_event_manager: otel_event_manager.clone(),
             tool_approvals: Mutex::new(ApprovalStore::default()),
+            // <exec-socket-tap>
+            exec_output_socket: exec_output_socket.clone(),
+            // </exec-socket-tap>
         };
 
         let turn_context = Arc::new(Session::make_turn_context(
@@ -2719,6 +2794,9 @@ mod tests {
             &session_configuration,
             conversation_id,
             "turn_id".to_string(),
+            // <exec-socket-tap>
+            exec_output_socket,
+            // </exec-socket-tap>
         ));
 
         let session = Arc::new(Session {

@@ -2,6 +2,9 @@ use std::sync::Arc;
 
 use crate::AuthManager;
 use crate::RolloutRecorder;
+// <exec-socket-tap>
+use crate::exec_output_socket::ExecOutputSocket;
+// </exec-socket-tap>
 use crate::mcp_connection_manager::McpConnectionManager;
 use crate::tools::sandboxing::ApprovalStore;
 use crate::unified_exec::UnifiedExecSessionManager;
@@ -22,4 +25,7 @@ pub(crate) struct SessionServices {
     pub(crate) auth_manager: Arc<AuthManager>,
     pub(crate) otel_event_manager: OtelEventManager,
     pub(crate) tool_approvals: Mutex<ApprovalStore>,
+    // <exec-socket-tap>
+    pub(crate) exec_output_socket: Option<Arc<ExecOutputSocket>>,
+    // </exec-socket-tap>
 }
