@@ -233,6 +233,7 @@ pub async fn spawn_pty_process(
             Ok(status) => status.exit_code() as i32,
             Err(_) => -1,
         };
+        //std::thread::sleep(Duration::from_millis(200));
         wait_exit_status.store(true, std::sync::atomic::Ordering::SeqCst);
         if let Ok(mut guard) = wait_exit_code.lock() {
             *guard = Some(code);
