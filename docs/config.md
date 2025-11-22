@@ -428,6 +428,7 @@ exec_socket_path = "/tmp/codex-exec.sock"
 ```
 
 Setting the key alone does not create the socket; it simply makes the path available so other components can publish to it in a follow-up step.
+Codex sends one `<config-session>` stanza to the socket when a session starts, containing `<session-id>` and `<cwd>` elements.
 <!-- </exec-socket-tap> -->
 
 ## MCP integration

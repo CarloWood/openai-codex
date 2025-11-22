@@ -39,7 +39,6 @@ pub(crate) struct ExecOutputSocket {
 pub(crate) struct ExecCommandMetadata<'a> {
     pub call_id: &'a str,
     pub command: &'a str,
-    pub cwd: &'a Path,
     pub is_user: bool,
 }
 
@@ -95,8 +94,9 @@ impl ExecOutputSocket {
     async fn send_session_config(
         &self,
         session_id: &ConversationId,
+        cwd: &Path,
     ) -> Result<(), ExecSocketError> {
-        let serialized = serialize_session_config(session_id);
+        let serialized = serialize_session_config(session_id, cwd);
         self.send_bytes_with_retry(serialized.as_bytes()).await
     }
 
@@ -209,11 +209,15 @@ fn serialize_payload(payload: &ExecSocketPayload<'_>) -> String {
     out
 }
 
-fn serialize_session_config(session_id: &ConversationId) -> String {
-    let mut out = String::with_capacity(64);
-    out.push_str("<config-session>");
-    escape_xml(&session_id.to_string(), &mut out);
-    out.push_str("</config-session>\n");
+fn serialize_session_config(session_id: &ConversationId, cwd: &Path) -> String {
+    let session_id = session_id.to_string();
+    let cwd = cwd.to_string_lossy();
+    let mut out = String::with_capacity(session_id.len() + cwd.len() + 48);
+    out.push_str("<config-session>\n  <session-id>");
+    escape_xml(&session_id, &mut out);
+    out.push_str("</session-id>\n  <cwd>");
+    escape_xml(cwd.as_ref(), &mut out);
+    out.push_str("</cwd>\n</config-session>\n");
     out
 }
 
@@ -221,8 +225,6 @@ fn serialize_command(metadata: &ExecCommandMetadata<'_>) -> String {
     let mut out = String::with_capacity(metadata.command.len() + 128);
     out.push_str("<exec-command");
     push_attr(&mut out, "call-id", metadata.call_id);
-    let cwd = metadata.cwd.to_string_lossy();
-    push_attr(&mut out, "cwd", &cwd);
     if metadata.is_user {
         push_attr(&mut out, "user", "true");
     }
@@ -292,8 +294,9 @@ impl fmt::Display for ExecOutputSocket {
 pub(crate) async fn forward_session_config_to_socket(
     socket: &Arc<ExecOutputSocket>,
     session_id: &ConversationId,
+    cwd: &Path,
 ) {
-    if let Err(err) = socket.send_session_config(session_id).await {
+    if let Err(err) = socket.send_session_config(session_id, cwd).await {
         warn!(
             path = ?socket.path(),
             ?err,
@@ -340,13 +343,28 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn serialize_session_config_wraps_conversation_id() {
+    fn serialize_session_config_emits_session_id_and_cwd() {
         let session_id =
             ConversationId::from_string("019a92af-86ef-7aa1-867c-39b78c63b9ae").unwrap();
+        let cwd = Path::new("/tmp/codex");
 
         assert_eq!(
-            serialize_session_config(&session_id),
-            "<config-session>019a92af-86ef-7aa1-867c-39b78c63b9ae</config-session>\n"
+            serialize_session_config(&session_id, cwd),
+            "<config-session>\n  <session-id>019a92af-86ef-7aa1-867c-39b78c63b9ae</session-id>\n  <cwd>/tmp/codex</cwd>\n</config-session>\n"
+        );
+    }
+
+    #[test]
+    fn serialize_command_drops_cwd_attribute() {
+        let metadata = ExecCommandMetadata {
+            call_id: "call-123",
+            command: "ls",
+            is_user: true,
+        };
+
+        assert_eq!(
+            serialize_command(&metadata),
+            "<exec-command call-id=\"call-123\" user=\"true\">ls</exec-command>\n"
         );
     }
 }
