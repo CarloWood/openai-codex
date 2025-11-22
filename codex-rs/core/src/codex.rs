@@ -703,7 +703,7 @@ impl Session {
         let exec_output_socket = Session::make_exec_output_socket(&config);
 
         if let Some(socket) = exec_output_socket.as_ref() {
-            forward_session_config_to_socket(socket, &conversation_id).await;
+            forward_session_config_to_socket(socket, &conversation_id, &config.cwd).await;
         }
         // </exec-socket-tap>
 

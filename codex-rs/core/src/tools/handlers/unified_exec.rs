@@ -187,7 +187,6 @@ impl ToolHandler for UnifiedExecHandler {
                     let metadata = ExecCommandMetadata {
                         call_id: &context.call_id,
                         command: &cmd,
-                        cwd: &cwd,
                         is_user: false,
                     };
                     info!(?metadata, "unified_exec: forwarding exec command to socket");

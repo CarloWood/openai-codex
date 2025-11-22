@@ -300,7 +300,6 @@ impl ShellHandler {
             let metadata = ExecCommandMetadata {
                 call_id: &call_id,
                 command: cmd,
-                cwd: &exec_params.cwd,
                 is_user: is_user_shell_command,
             };
             info!(?metadata, "shell: forwarding exec command to socket");

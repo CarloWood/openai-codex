@@ -113,7 +113,6 @@ impl SessionTask for UserShellCommandTask {
             let metadata = ExecCommandMetadata {
                 call_id: &call_id,
                 command: &raw_command,
-                cwd: &turn_context.cwd,
                 is_user: true,
             };
 
