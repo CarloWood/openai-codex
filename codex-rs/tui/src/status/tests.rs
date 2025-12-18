@@ -430,7 +430,7 @@ async fn status_card_token_usage_excludes_cached_tokens() {
 async fn status_shows_exec_socket_path_when_configured() {
     let temp_home = TempDir::new().expect("temp home");
     let mut config = test_config(&temp_home);
-    config.model = "gpt-5-codex".to_string();
+    config.model = Some("gpt-5.1-codex".to_string());
     config.cwd = PathBuf::from("/workspace/tests");
     config.exec_socket_path = Some(PathBuf::from("/custom/codex.sock"));
 
@@ -448,14 +448,19 @@ async fn status_shows_exec_socket_path_when_configured() {
         .single()
         .expect("timestamp");
 
+    let model_slug = ModelsManager::get_model_offline(config.model.as_deref());
+    let model_family = test_model_family(&model_slug, &config);
     let composite = new_status_output(
         &config,
         &auth_manager,
+        &model_family,
         &usage,
         Some(&usage),
         &None,
         None,
+        None,
         now,
+        &model_slug,
     );
     let rendered_lines = render_lines(&composite.display_lines(120));
 

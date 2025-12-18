@@ -22,7 +22,7 @@ use tokio::net::UnixStream;
 #[derive(Debug, Clone)]
 pub(crate) struct ExecSocketPayload<'a> {
     pub call_id: &'a str,
-    pub session_id: Option<i32>,
+    pub session_id: Option<&'a str>,
     pub exit_code: Option<i32>,
     pub is_final: bool,
     pub output: &'a str,
@@ -195,7 +195,7 @@ fn serialize_payload(payload: &ExecSocketPayload<'_>) -> String {
     out.push_str("<exec-output");
     push_attr(&mut out, "call-id", payload.call_id);
     if let Some(session_id) = payload.session_id {
-        push_attr(&mut out, "session-id", &session_id.to_string());
+        push_attr(&mut out, "session-id", session_id);
     }
     if let Some(exit) = payload.exit_code {
         push_attr(&mut out, "exit-code", &exit.to_string());

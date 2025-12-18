@@ -228,11 +228,10 @@ impl SessionTask for UserShellCommandTask {
                     .send_event(
                         turn_context.as_ref(),
                         EventMsg::ExecCommandEnd(ExecCommandEndEvent {
-                            call_id: call_id.clone(),
-                            process_id: None,
                             // <exec-socket-tap> : remove ': call_id.clone()'
                             call_id,
                             // </exec-socket-tap>
+                            process_id: None,
                             turn_id: turn_context.sub_id.clone(),
                             command: command.clone(),
                             cwd: cwd.clone(),

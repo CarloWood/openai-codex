@@ -267,12 +267,12 @@ impl ToolHandler for UnifiedExecHandler {
 
         // <exec-socket-tap> forward streamed exec output to socket tap
         if let Some(socket) = turn.exec_output_socket()
-            && (!response.output.is_empty() || response.session_id.is_none())
+            && (!response.output.is_empty() || response.process_id.is_none())
         {
-            let is_final = response.session_id.is_none();
+            let is_final = response.process_id.is_none();
             let payload = ExecSocketPayload {
                 call_id: &response.event_call_id,
-                session_id: response.session_id,
+                session_id: response.process_id.as_deref(),
                 exit_code: if is_final { response.exit_code } else { None },
                 is_final,
                 output: &response.output,
