@@ -523,7 +523,9 @@ impl ChatWidget {
         let reasoning_summary_format = self.get_model_family().reasoning_summary_format;
         // At the end of a reasoning block, record transcript-only content.
         self.full_reasoning_buffer.push_str(&self.reasoning_buffer);
-        if !self.full_reasoning_buffer.is_empty() {
+        let should_record =
+            !self.config.hide_agent_reasoning && !self.full_reasoning_buffer.is_empty();
+        if should_record {
             let cell = history_cell::new_reasoning_summary_block(
                 self.full_reasoning_buffer.clone(),
                 reasoning_summary_format,
