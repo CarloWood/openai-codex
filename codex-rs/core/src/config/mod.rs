@@ -168,6 +168,10 @@ pub struct Config {
     /// If unset the feature is disabled.
     pub notify: Option<Vec<String>>,
 
+    // <exec-socket-tap>
+    /// Optional UNIX socket path for tapping exec output chunks.
+    pub exec_socket_path: Option<PathBuf>,
+    // </exec-socket-tap>
     /// TUI notifications preference. When set, the TUI will send OSC 9 notifications on approvals
     /// and turn completions when not focused.
     pub tui_notifications: Notifications,
@@ -632,6 +636,10 @@ pub struct ConfigToml {
     #[serde(default)]
     pub notify: Option<Vec<String>>,
 
+    // <exec-socket-tap>
+    /// Optional UNIX socket path for tapping exec output chunks.
+    pub exec_socket_path: Option<PathBuf>,
+    // </exec-socket-tap>
     /// System instructions.
     pub instructions: Option<String>,
 
@@ -1224,6 +1232,16 @@ impl Config {
         )?;
         let compact_prompt = compact_prompt.or(file_compact_prompt);
 
+        // <exec-socket-tap>
+        let exec_socket_path = cfg.exec_socket_path.clone().map(|path| {
+            if path.is_absolute() {
+                path
+            } else {
+                resolved_cwd.join(path)
+            }
+        });
+        // </exec-socket-tap>
+
         // Default review model when not set in config; allow CLI override to take precedence.
         let review_model = override_review_model
             .or(cfg.review_model)
@@ -1286,7 +1304,9 @@ impl Config {
             history,
             file_opener: cfg.file_opener.unwrap_or(UriBasedFileOpener::VsCode),
             codex_linux_sandbox_exe,
-
+            // <exec-socket-tap>
+            exec_socket_path,
+            // </exec-socket-tap>
             hide_agent_reasoning: cfg.hide_agent_reasoning.unwrap_or(false),
             show_raw_agent_reasoning: cfg
                 .show_raw_agent_reasoning
@@ -3066,6 +3086,9 @@ model_verbosity = "high"
                 history: History::default(),
                 file_opener: UriBasedFileOpener::VsCode,
                 codex_linux_sandbox_exe: None,
+                // <exec-socket-tap>
+                exec_socket_path: None,
+                // </exec-socket-tap>
                 hide_agent_reasoning: false,
                 show_raw_agent_reasoning: false,
                 model_reasoning_effort: Some(ReasoningEffort::High),
@@ -3141,6 +3164,9 @@ model_verbosity = "high"
             history: History::default(),
             file_opener: UriBasedFileOpener::VsCode,
             codex_linux_sandbox_exe: None,
+            // <exec-socket-tap>
+            exec_socket_path: None,
+            // </exec-socket-tap>
             hide_agent_reasoning: false,
             show_raw_agent_reasoning: false,
             model_reasoning_effort: None,
@@ -3231,6 +3257,9 @@ model_verbosity = "high"
             history: History::default(),
             file_opener: UriBasedFileOpener::VsCode,
             codex_linux_sandbox_exe: None,
+            // <exec-socket-tap>
+            exec_socket_path: None,
+            // </exec-socket-tap>
             hide_agent_reasoning: false,
             show_raw_agent_reasoning: false,
             model_reasoning_effort: None,
@@ -3307,6 +3336,9 @@ model_verbosity = "high"
             history: History::default(),
             file_opener: UriBasedFileOpener::VsCode,
             codex_linux_sandbox_exe: None,
+            // <exec-socket-tap>
+            exec_socket_path: None,
+            // </exec-socket-tap>
             hide_agent_reasoning: false,
             show_raw_agent_reasoning: false,
             model_reasoning_effort: Some(ReasoningEffort::High),

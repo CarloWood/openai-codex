@@ -7,6 +7,10 @@ use codex_async_utils::OrCancelExt;
 use codex_protocol::user_input::UserInput;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
+// <exec-socket-tap>
+use tracing::debug;
+use tracing::info;
+// </exec-socket-tap>
 use uuid::Uuid;
 
 use crate::codex::TurnContext;
@@ -16,6 +20,13 @@ use crate::exec::StdoutStream;
 use crate::exec::StreamOutput;
 use crate::exec::execute_exec_env;
 use crate::exec_env::create_env;
+// <exec-socket-tap> forward user shell output to optional exec socket
+use crate::exec_output_socket::ExecCommandMetadata;
+use crate::exec_output_socket::ExecOutputSocket;
+use crate::exec_output_socket::ExecSocketPayload;
+use crate::exec_output_socket::forward_command_to_socket;
+use crate::exec_output_socket::forward_to_socket;
+// </exec-socket-tap>
 use crate::parse_command::parse_command;
 use crate::protocol::EventMsg;
 use crate::protocol::ExecCommandBeginEvent;
@@ -38,6 +49,26 @@ const USER_SHELL_TIMEOUT_MS: u64 = 60 * 60 * 1000; // 1 hour
 pub(crate) struct UserShellCommandTask {
     command: String,
 }
+
+// <exec-socket-tap> send user shell exec output chunks to configured socket
+async fn forward_exec_socket_output(
+    exec_socket: &Option<Arc<ExecOutputSocket>>,
+    call_id: &str,
+    exit_code: i32,
+    output: &str,
+) {
+    if let Some(socket) = exec_socket.as_ref() {
+        let payload = ExecSocketPayload {
+            call_id,
+            session_id: None,
+            exit_code: Some(exit_code),
+            is_final: true,
+            output,
+        };
+        forward_to_socket(socket, payload).await;
+    }
+}
+// </exec-socket-tap>
 
 impl UserShellCommandTask {
     pub(crate) fn new(command: String) -> Self {
@@ -75,6 +106,21 @@ impl SessionTask for UserShellCommandTask {
         let call_id = Uuid::new_v4().to_string();
         let raw_command = self.command.clone();
         let cwd = turn_context.cwd.clone();
+        // <exec-socket-tap>
+        let exec_socket = turn_context.exec_output_socket();
+
+        if let Some(socket) = exec_socket.as_ref() {
+            let metadata = ExecCommandMetadata {
+                call_id: &call_id,
+                command: &raw_command,
+                is_user: true,
+            };
+
+            info!(?metadata, "user_shell: forwarding exec command to socket");
+            debug!(?metadata, "user_shell: forwarding exec command to socket");
+            forward_command_to_socket(socket, metadata).await;
+        }
+        // </exec-socket-tap>
 
         let parsed_cmd = parse_command(&command);
         session
@@ -113,6 +159,12 @@ impl SessionTask for UserShellCommandTask {
         });
 
         let sandbox_policy = SandboxPolicy::DangerFullAccess;
+        // <exec-socket-tap> log exec command heading into exec_env for socket tap visibility
+        info!(
+            "user_shell: calling execute_exec_env with command {:?}",
+            exec_env.command
+        );
+        // </exec-socket-tap>
         let exec_result = execute_exec_env(exec_env, &sandbox_policy, stdout_stream)
             .or_cancel(&cancellation_token)
             .await;
@@ -136,6 +188,9 @@ impl SessionTask for UserShellCommandTask {
                 session
                     .record_conversation_items(turn_context.as_ref(), &output_items)
                     .await;
+                // <exec-socket-tap>
+                forward_exec_socket_output(&exec_socket, &call_id, -1, &aborted_message).await;
+                // </exec-socket-tap>
                 session
                     .send_event(
                         turn_context.as_ref(),
@@ -159,11 +214,23 @@ impl SessionTask for UserShellCommandTask {
                     .await;
             }
             Ok(Ok(output)) => {
+                // <exec-socket-tap> forward full aggregated output to the exec socket before recording events
+                let aggregated_output = output.aggregated_output.text.clone();
+                forward_exec_socket_output(
+                    &exec_socket,
+                    &call_id,
+                    output.exit_code,
+                    &aggregated_output,
+                )
+                .await;
+                // </exec-socket-tap>
                 session
                     .send_event(
                         turn_context.as_ref(),
                         EventMsg::ExecCommandEnd(ExecCommandEndEvent {
-                            call_id: call_id.clone(),
+                            // <exec-socket-tap> : remove ': call_id.clone()'
+                            call_id,
+                            // </exec-socket-tap>
                             process_id: None,
                             turn_id: turn_context.sub_id.clone(),
                             command: command.clone(),
@@ -173,7 +240,9 @@ impl SessionTask for UserShellCommandTask {
                             interaction_input: None,
                             stdout: output.stdout.text.clone(),
                             stderr: output.stderr.text.clone(),
-                            aggregated_output: output.aggregated_output.text.clone(),
+                            // <exec-socket-tap> reuse aggregated_output captured for socket forwarding
+                            aggregated_output,
+                            // </exec-socket-tap>
                             exit_code: output.exit_code,
                             duration: output.duration,
                             formatted_output: format_exec_output_str(
@@ -204,6 +273,16 @@ impl SessionTask for UserShellCommandTask {
                     duration: Duration::ZERO,
                     timed_out: false,
                 };
+                // <exec-socket-tap> forward error output to exec socket and reuse captured aggregate
+                let aggregated_output = exec_output.aggregated_output.text.clone();
+                forward_exec_socket_output(
+                    &exec_socket,
+                    &call_id,
+                    exec_output.exit_code,
+                    &aggregated_output,
+                )
+                .await;
+                // </exec-socket-tap>
                 session
                     .send_event(
                         turn_context.as_ref(),
@@ -218,7 +297,9 @@ impl SessionTask for UserShellCommandTask {
                             interaction_input: None,
                             stdout: exec_output.stdout.text.clone(),
                             stderr: exec_output.stderr.text.clone(),
-                            aggregated_output: exec_output.aggregated_output.text.clone(),
+                            // <exec-socket-tap> reuse aggregated output string sent to socket
+                            aggregated_output,
+                            // </exec-socket-tap>
                             exit_code: exec_output.exit_code,
                             duration: exec_output.duration,
                             formatted_output: format_exec_output_str(
